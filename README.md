@@ -1,2 +1,2 @@
 # AsynMongo
-Pymongo的简单异步封装
+Python Asynchronous MongoDB Driver Use Pymongo
