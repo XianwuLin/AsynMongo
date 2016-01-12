@@ -14,7 +14,6 @@ from pymongo import MongoClient
 import Queue
 import threading
 import time
-from collections import namedtuple
 
 class Borg(object):  # 单例模式
     _state = {}
