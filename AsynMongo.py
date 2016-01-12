@@ -37,15 +37,21 @@ class obj(object):
 class Db(Borg):
     def __init__(self, ip, port, db, collection):
         self.client = MongoClient(ip, port)
-        self.collection = self.client.get_database(db).get_collection(collection)
+        self.db_str = db
+        self.collection_str = collection
+        self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
         self.queue = Queue.Queue()
         self.runable = False
         self.timeout = 60
         self.l_list = []  #插入任务
         self.u_list = []  #更新任务
 
-    def collection(self): #返回pymongo原生collection对象
+    def collection(self,collection = ""): #返回pymongo原生collection对象或设置collection
+        if collection:
+            self.collection_str = collection
+            self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
         return self.collection
+        
 
     def insert(self, ob):  # 同步插入
         self.collection.insert_one(vars(ob))
