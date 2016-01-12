@@ -14,7 +14,7 @@ from pymongo import MongoClient
 import Queue
 import threading
 import time
-
+from collections import namedtuple
 
 class Borg(object):  # 单例模式
     _state = {}
@@ -26,12 +26,8 @@ class Borg(object):  # 单例模式
 
 
 class obj(object):
-    def __init__(self, d):
-        for a, b in d.items():
-            if isinstance(b, (list, tuple)):
-                setattr(self, a, [obj(x) if isinstance(x, dict) else x for x in b])
-            else:
-                setattr(self, a, obj(b) if isinstance(b, dict) else b)
+    def __init__(self, **entries):
+        self.__dict__.update(entries)
 
 
 class Db(Borg):
@@ -51,10 +47,10 @@ class Db(Borg):
             self.collection_str = collection
             self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
         return self.collection
-        
+
 
     def insert(self, ob):  # 同步插入
-        self.collection.insert_one(vars(ob))
+        self.collection.insert_one(ob.__dict__)
 
     def insert_asyn(self, ob, lsize=50, timeout=60):  # 异步插入
         if not self.runable:
@@ -66,8 +62,7 @@ class Db(Borg):
     def update(self, ob):  # 更新
         if not hasattr(ob, "_id"):
             raise Exception("not a normal mongo item")
-
-        self.collection.replace_one({"_id": ob._id}, vars(ob))
+        self.collection.replace_one({"_id": ob._id}, ob.__dict__)
 
     def update_asyn(self, ob, lsize=50, timeout=60):  # 异步更新
         if not self.runable:
@@ -76,23 +71,23 @@ class Db(Borg):
         self.timeout = timeout
         self.queue.put(["update", ob])
 
-    def find(self, json, limit=0, skip=0):  # 查询，返回对象generator
+    def find(self, json = dict(), limit=0, skip=0):  # 查询，返回对象generator
         if not limit:
             result = self.collection.find(json).skip(skip)
         else:
             result = self.collection.find(json).skip(skip).limit(limit)
         if not result:
-            yield obj({})
+            yield None
         else:
             for item in result:
-                yield obj(item)
+                yield obj(**item)
 
     def find_one(self, json):  # 查询一条，返回对象
         result = self.collection.find_one(json)
         if not result:
             return None
         else:
-            return obj(result)
+            return obj(**result)
 
     def run(self, lsize=50):
         while self.queue.qsize():
@@ -147,7 +142,7 @@ class Db(Borg):
                     elif isinstance(item,list):
                         mark, ob = item   #第一位为标志位，第二位为对象
                         if mark == "insert":
-                            self.l_list.append(vars(ob))
+                            self.l_list.append(ob.__dict__)
                         elif mark == "update":
                             self.u_list.append(ob)
                     else:
