@@ -29,7 +29,7 @@ class obj(object):
         self.__dict__.update(entries)
 
 
-class Db(Borg):
+class Db(object):
     def __init__(self, ip, port, db, collection):
         self.client = MongoClient(ip, port)
         self.db_str = db
