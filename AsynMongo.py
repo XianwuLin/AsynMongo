@@ -11,11 +11,25 @@
 """
 
 from pymongo import MongoClient
-import Queue
+from Queue import Queue, Empty
 import threading
 import time
+import logging
 
-class Borg(object):  # 单例模式
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="[%(asctime)s] %(name)s:%(levelname)s: %(message)s"
+)
+
+#Queue 模块补丁
+def put_left(self,item):
+    self.queue.appendleft(item)
+
+Queue.put_left = put_left
+
+
+# 单例模式
+class Borg(object):
     _state = {}
 
     def __new__(cls, *args, **kw):
@@ -24,29 +38,32 @@ class Borg(object):  # 单例模式
         return ob
 
 
+#字典打包对象
 class obj(object):
     def __init__(self, **entries):
         self.__dict__.update(entries)
 
 
-class Db(object):
-    def __init__(self, ip, port, db, collection):
+class AsynMongo(Borg):
+
+    def __init__(self, ip = "localhost", port = 27017):
         self.client = MongoClient(ip, port)
-        self.db_str = db
-        self.collection_str = collection
-        self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
-        self.queue = Queue.Queue()
+        self.db_str = ""
+        self.collection_str = ""
+
+    def initialize(self):
+        self.queue = Queue()
+        self.asyn_collection = None
         self.runable = False
         self.timeout = 60
         self.l_list = []  #插入任务
         self.u_list = []  #更新任务
 
-    def collection(self,collection = ""): #返回pymongo原生collection对象或设置collection
-        if collection:
-            self.collection_str = collection
-            self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
+    def set_collection(self, db, collection): #返回pymongo原生collection对象或设置collection
+        self.collection_str = collection
+        self.db_str = db
+        self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
         return self.collection
-
 
     def insert(self, ob):  # 同步插入
         self.collection.insert_one(ob.__dict__)
@@ -56,7 +73,7 @@ class Db(object):
             self.run(lsize=lsize)
 
         self.timeout = timeout
-        self.queue.put(["insert", ob])
+        self.queue.put([self.collection, "insert", ob])
 
     def update(self, ob):  # 更新
         if not hasattr(ob, "_id"):
@@ -68,7 +85,7 @@ class Db(object):
             self.run(lsize=lsize)
 
         self.timeout = timeout
-        self.queue.put(["update", ob])
+        self.queue.put([self.collection, "update", ob])
 
     def find(self, json = dict(), limit=0, skip=0):  # 查询，返回对象generator
         if not limit:
@@ -100,7 +117,7 @@ class Db(object):
         while self.queue.qsize():  # 等待未完成任务
             time.sleep(0.2)
         if self.runable:
-            self.queue.put_nowait("X")
+            self.queue.put("X")
             if self.t:
                 self.t.join()
                 return
@@ -111,6 +128,7 @@ class Db(object):
 
     def _run_single(self):
         while self.runable:
+
             if self.l_list:  # 执行上个循环的插入异步任务
                 self._real_insert_asyn(self.l_list)
                 self.l_list = []
@@ -119,7 +137,7 @@ class Db(object):
 
             if self.u_list: # 执行上个循环的更新异步任务
                 for ob in self.u_list:
-                    self.update(ob)
+                    self._real_update_asyn(ob)
             else:
                 pass
 
@@ -134,25 +152,40 @@ class Db(object):
             for i in xrange(size):
                 try:
                     item = self.queue.get(timeout=self.timeout)
+
                     if isinstance(item, str):
                         if item == "X":  # "X"为停止信号
                             self.runable = False
                             break
-                    elif isinstance(item,list):
-                        mark, ob = item   #第一位为标志位，第二位为对象
-                        if mark == "insert":
-                            self.l_list.append(ob.__dict__)
-                        elif mark == "update":
-                            self.u_list.append(ob)
+
+                    elif isinstance(item, list):
+                        collection, mark, ob = item   #第一位为标志位，第二位为对象
+
+                        if i == 0: #第一次运行循环，设置异步collection
+                            self.asyn_collection = collection
+
+                        if self.asyn_collection == collection:  #保证一个循环的collection是相同的
+                            if mark == "insert":
+                                self.l_list.append(ob.__dict__)
+                            elif mark == "update":
+                                self.u_list.append(ob)
+                        else:  #如果不同，把元素放回去
+                            logging.debug("collection change")
+                            self.queue.put_left(item)
+                            break
                     else:
                         raise Exception("Error Queue message:\t" + item)
-                except Queue.Empty:
+                except Empty:
                     self.runable = False
                     break
 
     def _real_insert_asyn(self, l_list):
         self.collection.insert_many(l_list)
 
+    def _real_update_asyn(self, ob):
+        if not hasattr(ob, "_id"):
+            raise Exception("not a normal mongo item")
+        self.collection.replace_one({"_id": ob._id}, ob.__dict__)
 
 ###################
 ##测试用例
@@ -164,23 +197,25 @@ class man():
 
 
 def main():
-    db = Db("127.0.0.1", 27017, "test", 'man')  # 申明数据库， ip, 端口，db名称，collection名称
+    db = AsynMongo("127.0.0.1", 27017)
+    db.initialize() #初始化
+    db.set_collection(db = "test", collection="woman") # 申明数据库， ip, 端口，db名称，collection名称
 
     #pymongo原生的collection对象
     col = db.collection
     for item in col.find({"name" : {"$exists" : True}}):
-        print item["name"]
-        print item["sex"]
         break
 
     # 同步插入对象
     db.insert(man())
+    print "asyn insert ok!"
 
     # 查询
     dict1 = {"name" : "bob"}
     a = db.find(dict1)
     for item in db.find(dict1):
-        print item.name
+        # print item.name
+        pass
 
     #同步更新
     dict2 = {"sex": "man"}
@@ -189,16 +224,18 @@ def main():
         item.name = "lily"
         item.sex = "woman"
         db.update(item)
-        print "OK"
     else:
-        print "None"
+        pass
+
+    print "sync insert ok!"
 
 
     # 异步插入对象
     for i in xrange(1000):
         db.insert_asyn(man(), lsize=200, timeout=5)  # 插入对象, lsize为粒度大小, 默认50; 空队列等待5s, 默认60s
+    print "sync insert ok!"
 
-
+    db.set_collection(db = "test", collection= 'woman')  # 申明数据库， ip, 端口，db名称，collection名称
     #异步更新
     dict2 = {"sex": "man"}
     for item in db.find(dict2):
@@ -206,9 +243,10 @@ def main():
             item.name = "lily"
             item.sex = "woman"
             db.update_asyn(item)
-            print "OK"
         else:
-            print "None"
+            pass
+
+    print "asyn update ok!"
 
     db.close() #异步不等待空队列，直接关闭
 
