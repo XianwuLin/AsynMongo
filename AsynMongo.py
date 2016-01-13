@@ -126,28 +126,33 @@ class AsynMongo(Borg):
         else:
             return
 
+    def run_last(self): # 执行上个循环任务
+        if self.l_list:  # 插入
+            self._real_insert_asyn(self.l_list)
+            self.l_list = []
+        else:
+            pass
+
+        if self.u_list: # 更新
+            for ob in self.u_list:
+                self._real_update_asyn(ob)
+        else:
+            pass
+
+    def get_size(self):
+        if self.queue.qsize() > self.lsize:  # 获取这个队列中的大小
+            size = self.lsize
+        else:
+            if self.queue.qsize():
+                size = self.queue.qsize()
+            else:
+                size = 1  # 如果队列为空，只要下次有数据插入（队列大于一），就会被捕获，激活线程
+        return size
+
     def _run_single(self):
         while self.runable:
-
-            if self.l_list:  # 执行上个循环的插入异步任务
-                self._real_insert_asyn(self.l_list)
-                self.l_list = []
-            else:
-                pass
-
-            if self.u_list: # 执行上个循环的更新异步任务
-                for ob in self.u_list:
-                    self._real_update_asyn(ob)
-            else:
-                pass
-
-            if self.queue.qsize() > self.lsize:  # 获取这个队列中的大小
-                size = self.lsize
-            else:
-                if self.queue.qsize():
-                    size = self.queue.qsize()
-                else:
-                    size = 1  # 如果队列为空，只要下次有数据插入（队列大于一），就会被捕获，激活线程
+            self.run_last()
+            size = self.get_size()
 
             for i in xrange(size):
                 try:
