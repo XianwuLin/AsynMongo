@@ -4,7 +4,7 @@
 # Date    : 2016-01-11 12:43:43
 # Author  : Victor Lin
 # Email   : linxianwusx@gmail.com
-# Version : 0.2
+# Version : 0.2.1
 ###############
 """
 这个模块封装了pymongo，提供了插入、查询、更新，以对象的形式进行操作，提供了异步插入和更新的方法。
@@ -58,12 +58,14 @@ class AsynMongo(Borg):
         self.timeout = 60
         self.l_list = []  #插入任务
         self.u_list = []  #更新任务
+        
+    def qsize(self): #返回队列长度
+        return self.queue.qsize()
 
-    def set_collection(self, db, collection): #返回pymongo原生collection对象或设置collection
+    def set_collection(self, db, collection): #设置collection
         self.collection_str = collection
         self.db_str = db
         self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
-        return self.collection
 
     def insert(self, ob):  # 同步插入
         self.collection.insert_one(ob.__dict__)
@@ -139,7 +141,7 @@ class AsynMongo(Borg):
         else:
             pass
 
-    def get_size(self):
+    def _get_size(self):
         if self.queue.qsize() > self.lsize:  # 获取这个队列中的大小
             size = self.lsize
         else:
@@ -152,7 +154,7 @@ class AsynMongo(Borg):
     def _run_single(self):
         while self.runable:
             self.run_last()
-            size = self.get_size()
+            size = self._get_size()
 
             for i in xrange(size):
                 try:
