@@ -4,8 +4,10 @@
 # Date    : 2016-01-11 12:43:43
 # Author  : Victor Lin
 # Email   : linxianwusx@gmail.com
+# Website : https://github.com/XianwuLin/AsynMongo
 # Version : 0.2.1
 ###############
+
 """
 这个模块封装了pymongo，提供了插入、查询、更新，以对象的形式进行操作，提供了异步插入和更新的方法。
 """
@@ -14,12 +16,6 @@ from pymongo import MongoClient
 from Queue import Queue, Empty
 import threading
 import time
-import logging
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="[%(asctime)s] %(name)s:%(levelname)s: %(message)s"
-)
 
 #Queue 模块补丁
 def put_left(self,item):
@@ -58,14 +54,15 @@ class AsynMongo(Borg):
         self.timeout = 60
         self.l_list = []  #插入任务
         self.u_list = []  #更新任务
-        
-    def qsize(self): #返回队列长度
-        return self.queue.qsize()
 
-    def set_collection(self, db, collection): #设置collection
+    def set_collection(self, db, collection): #返回pymongo原生collection对象或设置collection
         self.collection_str = collection
         self.db_str = db
         self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
+        return self
+
+    def qsize(self):
+        return self.queue.qsize()
 
     def insert(self, ob):  # 同步插入
         self.collection.insert_one(ob.__dict__)
@@ -177,7 +174,6 @@ class AsynMongo(Borg):
                             elif mark == "update":
                                 self.u_list.append(ob)
                         else:  #如果不同，把元素放回去
-                            logging.debug("collection change")
                             self.queue.put_left(item)
                             break
                     else:
