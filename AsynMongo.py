@@ -5,7 +5,7 @@
 # Author  : Victor Lin
 # Email   : linxianwusx@gmail.com
 # Website : https://github.com/XianwuLin/AsynMongo
-# Version : 0.2.1
+# Version : 0.2.2
 ###############
 
 """
@@ -17,6 +17,7 @@ from Queue import Queue, Empty
 import threading
 import time
 
+__version__ = "0.2.2"
 #Queue 模块补丁
 def put_left(self,item):
     self.queue.appendleft(item)
