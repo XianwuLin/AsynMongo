@@ -40,12 +40,13 @@ class obj(object):
         self.__dict__.update(entries)
 
 
-class AsynMongo(Borg):
+class AsynMongo(object):
 
     def __init__(self, ip = "localhost", port = 27017):
         self.client = MongoClient(ip, port)
         self.db_str = ""
         self.collection_str = ""
+        self.initialize()
 
     def initialize(self):
         self.queue = Queue()
