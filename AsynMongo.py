@@ -5,7 +5,7 @@
 # Author  : Victor Lin
 # Email   : linxianwusx@gmail.com
 # Website : https://github.com/XianwuLin/AsynMongo
-# Version : 0.2.2
+# Version : 0.2.3
 ###############
 
 """
@@ -17,7 +17,7 @@ from Queue import Queue, Empty
 import threading
 import time
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 #Queue 模块补丁
 def put_left(self,item):
     self.queue.appendleft(item)
@@ -41,12 +41,9 @@ class obj(object):
         self.__dict__.update(entries)
 
 
-class AsynMongo(object):
-
-    def __init__(self, ip = "localhost", port = 27017):
-        self.client = MongoClient(ip, port)
-        self.db_str = ""
-        self.collection_str = ""
+class Collection(object):
+    def __init__(self, collection):
+        self.collection = collection
         self.initialize()
 
     def initialize(self):
@@ -57,11 +54,9 @@ class AsynMongo(object):
         self.l_list = []  #插入任务
         self.u_list = []  #更新任务
 
-    def set_collection(self, db, collection): #返回pymongo原生collection对象或设置collection
-        self.collection_str = collection
-        self.db_str = db
-        self.collection = self.client.get_database(self.db_str).get_collection(self.collection_str)
-        return self
+    def set_collection(self, client, db, collection):
+        self.collection = client.get_database(db).get_collection(collection)
+
 
     def qsize(self):
         return self.queue.qsize()
@@ -202,33 +197,30 @@ class man():
 
 
 def main():
-    db = AsynMongo("127.0.0.1", 27017)
-    db.initialize() #初始化
-    db.set_collection(db = "test", collection="woman") # 申明数据库， ip, 端口，db名称，collection名称
+    client = MongoClient("10.67.2.245",27017)
+    col = Collection(client.test.woman)
 
-    #pymongo原生的collection对象
-    col = db.collection
     for item in col.find({"name" : {"$exists" : True}}):
         break
 
     # 同步插入对象
-    db.insert(man())
+    col.insert(man())
     print "asyn insert ok!"
 
     # 查询
     dict1 = {"name" : "bob"}
-    a = db.find(dict1)
-    for item in db.find(dict1):
+    a = col.find(dict1)
+    for item in col.find(dict1):
         # print item.name
         pass
 
     #同步更新
     dict2 = {"sex": "man"}
-    item = db.find_one(dict2)
+    item = col.find_one(dict2)
     if item:
         item.name = "lily"
         item.sex = "woman"
-        db.update(item)
+        col.update(item)
     else:
         pass
 
@@ -237,23 +229,23 @@ def main():
 
     # 异步插入对象
     for i in xrange(1000):
-        db.insert_asyn(man(), lsize=200, timeout=5)  # 插入对象, lsize为粒度大小, 默认50; 空队列等待5s, 默认60s
+        col.insert_asyn(man(), lsize=200, timeout=5)  # 插入对象, lsize为粒度大小, 默认50; 空队列等待5s, 默认60s
     print "sync insert ok!"
 
-    db.set_collection(db = "test", collection= 'woman')  # 申明数据库， ip, 端口，db名称，collection名称
+    col.set_collection(client = client, db = "test", collection= 'woman')  # 申明数据库， ip, 端口，col名称，collection名称
     #异步更新
     dict2 = {"sex": "man"}
-    for item in db.find(dict2):
+    for item in col.find(dict2):
         if item:
             item.name = "lily"
             item.sex = "woman"
-            db.update_asyn(item)
+            col.update_asyn(item)
         else:
             pass
 
     print "asyn update ok!"
 
-    db.close() #异步不等待空队列，直接关闭
+    col.close() #异步不等待空队列，直接关闭
 
 
 if __name__ == "__main__":
