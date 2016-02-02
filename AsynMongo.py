@@ -3,21 +3,53 @@
 ###############
 # Date    : 2016-01-11 12:43:43
 # Author  : Victor Lin
-# Email   : linxianwusx@gmail.com
 # Website : https://github.com/XianwuLin/AsynMongo
-# Version : 0.2.3
+# Version : 0.2.4
 ###############
 
 """
 这个模块封装了pymongo，提供了插入、查询、更新，以对象的形式进行操作，提供了异步插入和更新的方法。
+
+注意：不要在MongoDB中使用 _origin 这个字段
+demo：
+
+from pymongo import MongoClient
+from AsynMongo import Collection
+
+class man():
+    pass
+
+#初始化
+client = MongoClient()
+col = Collection(client.test.test)
+
+#插入
+item = man()
+item.name = "bob"
+item.sex = "male"
+col.insert(item) #同步
+col.insert_asyn(item) #异步
+
+#更新
+a = col.find_one({"name" : "bob", "sex" : "male"})
+#for item in col.find({}):
+    #do something
+a.sex = "female"
+col.update(item) #同步
+col.update_asyn(item) #异步
+
+#等待异步操作完成
+col.close()
+
 """
 
 from pymongo import MongoClient
 from Queue import Queue, Empty
+from copy import deepcopy
 import threading
 import time
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 #Queue 模块补丁
 def put_left(self,item):
     self.queue.appendleft(item)
@@ -39,6 +71,7 @@ class Borg(object):
 class obj(object):
     def __init__(self, **entries):
         self.__dict__.update(entries)
+        self._origin = deepcopy(self.__dict__)
 
 
 class Collection(object):
@@ -54,15 +87,44 @@ class Collection(object):
         self.l_list = []  #插入任务
         self.u_list = []  #更新任务
 
+    @staticmethod
+    def _get_dict(ob):
+        if not hasattr(ob,"_origin"):
+            return ob.__dict__
+        else:
+            dict1 = dict(ob.__dict__)
+            dict1.pop("_origin")
+            return dict1
+
+    @staticmethod
+    def _get_remove_dict(dict_origin, dict_now):
+        remove_list = list(set(dict_origin.keys()).difference(dict_now.keys()))
+        remove_dict = dict()
+        for i in remove_list:
+            remove_dict[i] = 1
+        return remove_dict
+
+    @staticmethod
+    def _get_update_dict(dict_origin, dict_now):
+        update_dict = dict()
+
+        for item in dict_now.items():
+            k,v = item
+            if dict_origin.has_key(k) and dict_origin[k] == v:
+                pass
+            else:
+                update_dict[k] = v
+
+        return update_dict
+
     def set_collection(self, client, db, collection):
         self.collection = client.get_database(db).get_collection(collection)
-
 
     def qsize(self):
         return self.queue.qsize()
 
     def insert(self, ob):  # 同步插入
-        self.collection.insert_one(ob.__dict__)
+        self.collection.insert_one(self._get_dict(ob))
 
     def insert_asyn(self, ob, lsize=50, timeout=60):  # 异步插入
         if not self.runable:
@@ -74,7 +136,7 @@ class Collection(object):
     def update(self, ob):  # 更新
         if not hasattr(ob, "_id"):
             raise Exception("not a normal mongo item")
-        self.collection.replace_one({"_id": ob._id}, ob.__dict__)
+        self._real_update(ob)
 
     def update_asyn(self, ob, lsize=50, timeout=60):  # 异步更新
         if not self.runable:
@@ -83,11 +145,11 @@ class Collection(object):
         self.timeout = timeout
         self.queue.put([self.collection, "update", ob])
 
-    def find(self, json = dict(), limit=0, skip=0):  # 查询，返回对象generator
+    def find(self, json = dict(), item= dict(), limit=0, skip=0):  # 查询，返回对象generator
         if not limit:
-            result = self.collection.find(json).skip(skip)
+            result = self.collection.find(json, item).skip(skip)
         else:
-            result = self.collection.find(json).skip(skip).limit(limit)
+            result = self.collection.find(json, item).skip(skip).limit(limit)
         if not result:
             yield None
         else:
@@ -122,7 +184,7 @@ class Collection(object):
         else:
             return
 
-    def run_last(self): # 执行上个循环任务
+    def _run_last(self): # 执行上个循环任务
         if self.l_list:  # 插入
             self._real_insert_asyn(self.l_list)
             self.l_list = []
@@ -131,7 +193,7 @@ class Collection(object):
 
         if self.u_list: # 更新
             for ob in self.u_list:
-                self._real_update_asyn(ob)
+                self._real_update(ob)
         else:
             pass
 
@@ -147,7 +209,7 @@ class Collection(object):
 
     def _run_single(self):
         while self.runable:
-            self.run_last()
+            self._run_last()
             size = self._get_size()
 
             for i in xrange(size):
@@ -160,14 +222,14 @@ class Collection(object):
                             break
 
                     elif isinstance(item, list):
-                        collection, mark, ob = item   #第一位为标志位，第二位为对象
+                        collection, mark, ob = item   #第一位为集合，第二位为标志位，第三位为对象
 
                         if i == 0: #第一次运行循环，设置异步collection
                             self.asyn_collection = collection
 
                         if self.asyn_collection == collection:  #保证一个循环的collection是相同的
                             if mark == "insert":
-                                self.l_list.append(ob.__dict__)
+                                self.l_list.append(self._get_dict(ob))
                             elif mark == "update":
                                 self.u_list.append(ob)
                         else:  #如果不同，把元素放回去
@@ -182,10 +244,18 @@ class Collection(object):
     def _real_insert_asyn(self, l_list):
         self.collection.insert_many(l_list)
 
-    def _real_update_asyn(self, ob):
+    def _real_update(self, ob):
         if not hasattr(ob, "_id"):
             raise Exception("not a normal mongo item")
-        self.collection.replace_one({"_id": ob._id}, ob.__dict__)
+        elif not hasattr(ob, "_origin"):
+            raise Exception("have no _origin data, can't use update_asyn callable")
+
+        dict_now = self._get_dict(ob)
+        dict_origin = ob._origin
+        update_dict = self._get_update_dict(dict_origin, dict_now) #要$set的字典
+        remove_dict = self._get_remove_dict(dict_origin, dict_now) #要$unset的字典
+
+        self.collection.update({"_id": ob._id}, {"$set": update_dict, "$unset" : remove_dict})
 
 ###################
 ##测试用例
@@ -197,7 +267,7 @@ class man():
 
 
 def main():
-    client = MongoClient("10.67.2.245",27017)
+    client = MongoClient("localhost",27017)
     col = Collection(client.test.woman)
 
     for item in col.find({"name" : {"$exists" : True}}):
