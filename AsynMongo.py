@@ -50,7 +50,7 @@ from copy import deepcopy
 import threading
 import time
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 #Queue 模块补丁
 def put_left(self,item):
     self.queue.appendleft(item)
