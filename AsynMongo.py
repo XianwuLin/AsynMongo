@@ -5,7 +5,7 @@
 # Author  : Victor Lin
 # Email   : linxianwusx@gmail.com
 # Website : https://github.com/XianwuLin/AsynMongo
-# Version : 0.2.4
+# Version : 0.2.5
 ###############
 
 """
