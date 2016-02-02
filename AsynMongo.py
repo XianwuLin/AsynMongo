@@ -3,6 +3,7 @@
 ###############
 # Date    : 2016-01-11 12:43:43
 # Author  : Victor Lin
+# Email   : linxianwusx@gmail.com
 # Website : https://github.com/XianwuLin/AsynMongo
 # Version : 0.2.4
 ###############
