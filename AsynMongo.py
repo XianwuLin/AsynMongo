@@ -148,17 +148,26 @@ class Collection(object):
 
     def find(self, json = dict(), item= dict(), limit=0, skip=0):  # 查询，返回对象generator
         if not limit:
-            result = self.collection.find(json, item).skip(skip)
+            if not item:
+                result = self.collection.find(json).skip(skip)
+            else:
+                result = self.collection.find(json, item).skip(skip)
         else:
-            result = self.collection.find(json, item).skip(skip).limit(limit)
+            if not item:
+                result = self.collection.find(json).skip(skip).limit(limit)
+            else:
+                result = self.collection.find(json, item).skip(skip).limit(limit)
         if not result:
             yield None
         else:
             for item in result:
                 yield obj(**item)
 
-    def find_one(self, json):  # 查询一条，返回对象
-        result = self.collection.find_one(json)
+    def find_one(self,  json = dict(), item= dict()):  # 查询一条，返回对象
+        if not item:
+            result = self.collection.find_one(json)
+        else:
+            result = self.collection.find_one(json, item)
         if not result:
             return None
         else:
