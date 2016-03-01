@@ -5,7 +5,7 @@
 # Author  : Victor Lin
 # Email   : linxianwusx@gmail.com
 # Website : https://github.com/XianwuLin/AsynMongo
-# Version : 0.2.5
+# Version : 0.2.6
 ###############
 
 """
@@ -46,11 +46,12 @@ col.close()
 
 from pymongo import MongoClient
 from Queue import Queue, Empty
-from copy import deepcopy
+import cPickle as pickle
+import bson
 import threading
 import time
 
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 #Queue 模块补丁
 def put_left(self,item):
     self.queue.appendleft(item)
@@ -72,7 +73,8 @@ class Borg(object):
 class obj(object):
     def __init__(self, **entries):
         self.__dict__.update(entries)
-        self._origin = deepcopy(self.__dict__)
+        self._id = str(self._id)
+        self._origin = pickle.dumps(self)
 
 
 class Collection(object):
@@ -261,12 +263,16 @@ class Collection(object):
             raise Exception("have no _origin data, can't use update_asyn callable")
 
         dict_now = self._get_dict(ob)
-        dict_origin = ob._origin
+        dict_origin = pickle.loads(ob._origin).__dict__
         update_dict = self._get_update_dict(dict_origin, dict_now) #要$set的字典
         remove_dict = self._get_remove_dict(dict_origin, dict_now) #要$unset的字典
-
-        self.collection.update({"_id": ob._id}, {"$set": update_dict, "$unset" : remove_dict})
-
+        _id = bson.objectid.ObjectId(ob._id)
+        if update_dict and remove_dict:
+            self.collection.update_one({"_id": _id}, {"$set": update_dict, "$unset" : remove_dict})
+        elif update_dict:
+            self.collection.update_one({"_id": _id}, {"$set": update_dict})
+        elif remove_dict:
+            self.collection.update_one({"_id": _id}, {"$unset" : remove_dict})
 ###################
 ##测试用例
 ###################

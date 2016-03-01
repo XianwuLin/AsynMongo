@@ -1,0 +1,1 @@
+from AsynMongo import Collection
