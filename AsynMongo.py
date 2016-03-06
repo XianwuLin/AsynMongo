@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 ###############
-# Date    : 2016-01-11 12:43:43
 # Author  : Victor Lin
 # Email   : linxianwusx@gmail.com
 # Website : https://github.com/XianwuLin/AsynMongo
-# Version : 0.2.6
 ###############
 
 """
@@ -45,19 +43,17 @@ col.close()
 """
 
 from pymongo import MongoClient
-from Queue import Queue, Empty
-import cPickle as pickle
+from bq import BQ
+import simplejson as json
 import bson
 import threading
 import time
 
-__version__ = "0.2.6"
-#Queue 模块补丁
-def put_left(self,item):
-    self.queue.appendleft(item)
+__version__ = "0.2.7"
 
-Queue.put_left = put_left
-
+class Empty(Exception):
+    "Exception raised by Queue.get(block=0)/get_nowait()."
+    pass
 
 # 单例模式
 class Borg(object):
@@ -74,16 +70,17 @@ class obj(object):
     def __init__(self, **entries):
         self.__dict__.update(entries)
         self._id = str(self._id)
-        self._origin = pickle.dumps(self)
+        self._origin = json.dumps(self.__dict__)
 
 
 class Collection(object):
-    def __init__(self, collection):
+    def __init__(self, collection, qname = None):
         self.collection = collection
+        self.qname = qname
         self.initialize()
 
     def initialize(self):
-        self.queue = Queue()
+        self.queue = BQ()
         self.asyn_collection = None
         self.runable = False
         self.timeout = 60
@@ -263,7 +260,7 @@ class Collection(object):
             raise Exception("have no _origin data, can't use update_asyn callable")
 
         dict_now = self._get_dict(ob)
-        dict_origin = pickle.loads(ob._origin).__dict__
+        dict_origin = json.loads(ob._origin)
         update_dict = self._get_update_dict(dict_origin, dict_now) #要$set的字典
         remove_dict = self._get_remove_dict(dict_origin, dict_now) #要$unset的字典
         _id = bson.objectid.ObjectId(ob._id)
@@ -333,6 +330,22 @@ def main():
 
     col.close() #异步不等待空队列，直接关闭
 
+def main1():
+    col = Collection(MongoClient("10.67.2.245").test.tissue)
+    a = 1
+    for item in col.find():
+        if hasattr(item, "neuron"):
+            delattr(item, "neuron")
+        col.update_asyn(item)
+        a += 1
+        if a > 7000:
+            break
+
+    while col.qsize():
+        print col.qsize()
+        time.sleep(3)
+
+    col.close()
 
 if __name__ == "__main__":
-    main()
+    main1()

@@ -1,0 +1,122 @@
+<html>
+
+    <head>
+        <meta charset="utf-8">
+        <title>python原生队列监控</title>
+        <script type="text/javascript" src="http://cdn.hcharts.cn/jquery/jquery-1.8.3.min.js">
+        </script>
+        <script type="text/javascript" src="http://cdn.hcharts.cn/highcharts/highcharts.js">
+        </script>
+    </head>
+
+    <body>
+        <h1 style="text-align: center;">python原生队列监控</h1>
+        <div id="control" style="margin-left: 50px;">
+        </div>
+        <div id="container" style="min-width:400px;height:400px;">
+        </div>
+        <script>
+            $(function() {
+                $(document).ready(function() {
+                    $.ajax({
+                        url: "/all_qsizes",
+                        async: false,
+                        dateType: "json",
+                        success: function(data){
+                            json = eval(data);
+                            for(var i=0; i < json.length; i++){
+                                console.log(json[i]);
+                                $("#control").append('<input type="radio" name="control" value="' + json[i]["name"] +'" checked="checked" />'+ json[i]["name"])
+                            };
+                        },
+                    });
+
+                    Highcharts.setOptions({
+                        global: {
+                            useUTC: false
+                        }
+                    });
+
+                    var y_value = 0;
+                    function get_y() {
+                        var name = $("input[name='control']:checked").val();
+                        $.getJSON("/qsize?name=" + name,
+                        function(json) {
+                            y_value = parseInt(json["qsize"]);
+                        });
+                        return y_value;
+                    };
+
+                    var chart;
+                    $('#container').highcharts({
+                        chart: {
+                            type: 'spline',
+                            animation: Highcharts.svg,
+                            // don't animate in old IE
+                            marginRight: 10,
+                            events: {
+                                load: function() {
+                                    var series = this.series[0];
+                                    setInterval(function() {
+                                        var x = (new Date()).getTime(),
+                                        // current time
+                                        y = get_y();
+                                        series.addPoint([x, y], true, true);
+                                    },
+                                    1000);
+                                }
+                            }
+                        },
+                        title: {
+                            text: '第一队列大小实时展示' //主标题
+                        },
+                        xAxis: { //X轴
+                            type: 'datetime',
+                            tickPixelInterval: 150
+                        },
+                        yAxis: { //Y轴
+                            title: {
+                                text: '数据'
+                            },
+                            plotLines: [{
+                                value: 0,
+                                width: 1,
+                                color: '#808080'
+                            }]
+                        },
+                        tooltip: {
+                            formatter: function() {
+                                return '<b>' + this.series.name + '</b><br>' + Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) + '<br>' + Highcharts.numberFormat(this.y, 2);
+                            }
+                        },
+                        legend: {
+                            enabled: false
+                        },
+                        exporting: {
+                            enabled: false
+                        },
+                        series: [{
+                            name: 'qsize',
+                            data: (function() {
+                                var data = [],
+                                time = (new Date()).getTime(),
+                                i;
+
+                                for (i = -24; i <= 0; i++) {
+                                    data.push({
+                                        x: time + i * 1000,
+                                        y: 0
+                                    });
+                                }
+                                return data;
+                            })()
+                        },
+                        ]
+                    });
+                });
+
+            });
+        </script>
+    </body>
+
+</html>
