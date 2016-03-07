@@ -51,6 +51,9 @@ def singleton(cls, *args, **kw):
 #接口 /all_qsize  请求全部队列的长度
 #接口 / 请求监控首页
 class HTTPHandler(BaseHTTPRequestHandler):
+    def log_message(self, format, *args): #silent log out
+        return
+
     def do_GET(self):
         self.protocal_version = "HTTP/1.1"
         path = urlparse.urlparse(self.path)
@@ -106,35 +109,62 @@ class QueueManger(object):
             self.t = threading.Thread(target=start_server,)
             self.t.start()
 
-    def Queue(self, name = None, maxsize=0):
+    def Queue(self, name = None, maxsize=0): #获取新队列或存在的队列
+        if name in self.queue_dict.keys():
+            return queue_dict[name]
+
         if not name:
-            name = "Queue%d" % len(self.queue_dict.items())
+            max_name_id = 0
+            for namet in self.queue_dict.keys():
+                if namet[:5] == "Queue":
+                    name_id = int(namet[5:])
+                    if max_name_id <= name_id:
+                        max_name_id = name_id +1
+            name = "Queue%d" % max_name_id
         queue = OriginQueue(name, maxsize)
         self.queue_dict[name] = queue
         return queue
 
-    def all_queues(self):
+    def all_queues(self): #获取全部队列字典
         return self.queue_dict
 
-    def key(self, name):
+    def key(self, name): #返回队列名称
         if self.queue_dict.has_key(name):
             return self.queue.key()
         else:
             return None
 
-    def clear(self, name):
-        if self.queue_dict.has_key(name):
-            self.queue_dict.pop(name)
+    def clear(self, queue_ob= None, name = None): #清空队列
+        if (not queue_ob) and (not name):
+            for queue in self.queue_dict.values():
+                queue.clear()
+        elif queue_ob in self.queue_dict.values():
+            queue_ob.clear()
+        elif name in self.queue_dict.keys():
+            self.queue_dict[name].clear()
         else:
-            raise Exception("No queue %s" % name)
+            raise Exception("queue error")
 
-    def qsize(self, name):
+    def remove(self, queue_ob=None, name = None): #删除队列
+        if (not queue_ob) and (not name):
+            for queue in self.queue_dict.values():
+                queue = None
+            self.queue_dict = dict()
+        elif queue_ob in self.queue_dict.values():
+            del self.queue_dict[queue_ob.name]
+        elif name in self.queue_dict.keys():
+            del self.queue_dict[name]
+        else:
+            raise Exception("queue error")
+
+
+    def qsize(self, name): #获取队列长度
         if self.queue_dict.has_key(name):
             return self.queue_dict[name].qsize()
         else:
             raise Exception("No queue %s" % name)
 
-    def shutdown(self):
+    def shutdown(self): #关闭队列的监控
         http_server.shutdown()
 
 def main():

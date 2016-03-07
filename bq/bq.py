@@ -2,7 +2,7 @@
 class BQ():
     def __init__(self, qtype = 'Queue', qname = None, **k):
         if qtype == "Queue":
-            from python-queue import QueueManger
+            from python_queue import QueueManger
             self.queue_manger = QueueManger()
             self.queue = self.queue_manger.Queue(name = qname, **k)
         elif qtype == "Redis":

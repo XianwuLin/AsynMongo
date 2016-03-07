@@ -1,122 +1,141 @@
 <html>
 
-    <head>
-        <meta charset="utf-8">
-        <title>python原生队列监控</title>
-        <script type="text/javascript" src="http://cdn.hcharts.cn/jquery/jquery-1.8.3.min.js">
-        </script>
-        <script type="text/javascript" src="http://cdn.hcharts.cn/highcharts/highcharts.js">
-        </script>
-    </head>
+	<head>
+		<meta charset="utf-8">
+		<title>python原生队列监控</title>
+		<script type="text/javascript" src="http://cdn.hcharts.cn/jquery/jquery-1.8.3.min.js">
+		</script>
+		<script type="text/javascript" src="http://cdn.hcharts.cn/highcharts/highcharts.js">
+		</script>
+	</head>
 
-    <body>
-        <h1 style="text-align: center;">python原生队列监控</h1>
-        <div id="control">
-        </div>
-        <div id="container" style="min-width:400px;height:400px;">
-        </div>
-        <script>
-            $(function() {
-                $(document).ready(function() {
-                    $.ajax({
-                        url: "/all_qsizes",
-                        async: false,
-                        dateType: "json",
-                        success: function(data){
-                            json = eval(data);
-                            for(var i=0; i < json.length; i++){
-                                console.log(json[i]);
-                                $("#control").append('<input type="radio" name="control" value="' + json[i]["name"] +'" checked="checked" />'+ json[i]["name"])
-                            };
-                        },
-                    });
+	<body>
+		<h1 style="text-align: center;">python原生队列监控</h1>
+		<div id="control">
+		</div>
+		<div id="container" style="width:800px;height:400px;">
+		</div>
+		<script>
+			$(function() {
+				$(document).ready(function() {
+					Highcharts.setOptions({
+						global: {
+							useUTC: false
+						}
+					});
+					var y_value = 0;
 
-                    Highcharts.setOptions({
-                        global: {
-                            useUTC: false
-                        }
-                    });
+					function get_y() {
+						var name = $("input[name='control']:checked").val();
+						$.getJSON("/qsize?name=" + name,
+							function(json) {
+								y_value = parseInt(json["qsize"]);
+							});
+						return y_value;
+					};
+					$('#container').highcharts({
+						chart:{
+							marginRight: 120
+						},
+						title: {
+							text: '队列大小实时监控' //主标题
+						},
+						xAxis: { //X轴
+							type: 'datetime',
+							tickPixelInterval: 150
+						},
+						yAxis: { //Y轴
+							title: {
+								text: '数据量'
+							},
+							plotLines: [{
+								value: 0,
+								width: 1,
+								color: '#808080'
+							}]
+						},
+						tooltip: {
+							backgroundColor: '#FCFFC5',
+							borderColor: 'black',
+    						borderRadius: 10,
+							formatter: function() {
+								return '<b>' + this.series.name + '</b><br>' + Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) + '<br>' + Highcharts.numberFormat(this.y, 2);
+							}
+						},
+						legend: {
+							align: 'right',
+            				verticalAlign: 'top',
+            				layout: "vertical",
+            				floating: true,
+            				x: 0,
+            				y: 100
+						},
+						exporting: {
+							enabled: false
+						},
+						credits: {
+    					    enabled:false
+						},
+						series: []
+					});
+					var chart = $('#container').highcharts();
 
-                    var y_value = 0;
-                    function get_y() {
-                        var name = $("input[name='control']:checked").val();
-                        $.getJSON("/qsize?name=" + name,
-                        function(json) {
-                            y_value = parseInt(json["qsize"]);
-                        });
-                        return y_value;
-                    };
+					function newCheck() {
+						$.ajax({
+							url: "/all_qsizes",
+							dateType: "json",
+							success: function(data) {
+								json = eval(data);
+								//获取全部的serie id
+								var allSeriesId = new Array();
+								$(chart.series).each(function(i, serie) {
+									allSeriesId.push(serie.options.id);
+								});
 
-                    var chart;
-                    $('#container').highcharts({
-                        chart: {
-                            type: 'spline',
-                            animation: Highcharts.svg,
-                            // don't animate in old IE
-                            marginRight: 10,
-                            events: {
-                                load: function() {
-                                    var series = this.series[0];
-                                    setInterval(function() {
-                                        var x = (new Date()).getTime(),
-                                        // current time
-                                        y = get_y();
-                                        series.addPoint([x, y], true, true);
-                                    },
-                                    1000);
-                                }
-                            }
-                        },
-                        title: {
-                            text: '第一队列大小实时展示' //主标题
-                        },
-                        xAxis: { //X轴
-                            type: 'datetime',
-                            tickPixelInterval: 150
-                        },
-                        yAxis: { //Y轴
-                            title: {
-                                text: '数据'
-                            },
-                            plotLines: [{
-                                value: 0,
-                                width: 1,
-                                color: '#808080'
-                            }]
-                        },
-                        tooltip: {
-                            formatter: function() {
-                                return '<b>' + this.series.name + '</b><br>' + Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) + '<br>' + Highcharts.numberFormat(this.y, 2);
-                            }
-                        },
-                        legend: {
-                            enabled: false
-                        },
-                        exporting: {
-                            enabled: false
-                        },
-                        series: [{
-                            name: 'qsize',
-                            data: (function() {
-                                var data = [],
-                                time = (new Date()).getTime(),
-                                i;
+								var jsonName = new Array();
+								for (var i = 0; i < json.length; i++) {
+									jsonName.push(json[i]["name"])
+									var name1 = json[i]["name"];
+									var serie = chart.get(name1);
+									var x = (new Date()).getTime();
+									var y = json[i]["qsize"];
+									if ($.inArray(name1, allSeriesId) != -1) { //更新已有的线
+										serie.addPoint([x, y], false, true);
+//										serie.removePoint(0, false);
+									} else { //添加新的线
+										chart.addSeries({
+											name: name1,
+											id: name1,
+											data: (function() {
+												var data = [];
+												var	time = (new Date()).getTime();
+												for (var i = -24; i <= 0; i++) {
+													data.push({
+														x: time + i * 1000,
+														y: 0
+													});
+												}
+												data[24][1] = y;
+												return data;
+											})()
+										}, false);
+									};
+								};
 
-                                for (i = -24; i <= 0; i++) {
-                                    data.push({
-                                        x: time + i * 1000,
-                                        y: 0
-                                    });
-                                }
-                                return data;
-                            })()
-                        },
-                        ]
-                    });
-                });
+								for (var i = 0; i < allSeriesId.length; i++){ //执行完的queue处理删除之
+									if($.inArray(allSeriesId[i], jsonName) == -1){
+										chart.get(allSeriesId[i]).remove(false);
+									}
+								}
 
-            });
-        </script>
-    </body>
+								chart.redraw();
+							}
+						});
+					};
+					setInterval(newCheck, 1000);
+				});
+			});
+		</script>
+	</body>
 
 </html>
