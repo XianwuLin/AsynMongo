@@ -58,8 +58,8 @@ class HTTPHandler(BaseHTTPRequestHandler):
             query = path.query.split("=")
             if len(query) == 2:
                 if query[0].strip() == "name":
-                    pyq = Pyq()
-                    size = pyq.qsize(query[1].strip())
+                    QM = QueueManger()
+                    size = QM.qsize(query[1].strip())
                     self.send_response(200)
                     self.end_headers()
                     return_json = {
@@ -68,12 +68,12 @@ class HTTPHandler(BaseHTTPRequestHandler):
                         }
                     self.wfile.write(json.dumps(return_json))
         elif path.path == '/all_qsizes':
-            pyq = Pyq()
+            QM = QueueManger()
             return_list = []
-            for name in pyq.all_queues().keys():
+            for name in QM.all_queues().keys():
                 json1 = {
                     "name" :  name,
-                    "qsize" : pyq.get_queue_size(name)
+                    "qsize" : QM.qsize(name)
                 }
                 return_list.append(json1)
             self.send_response(200)
@@ -109,7 +109,7 @@ class QueueManger(object):
     def Queue(self, name = None, maxsize=0):
         if not name:
             name = "Queue%d" % len(self.queue_dict.items())
-        queue = Origin_Queue(name, maxsize)
+        queue = OriginQueue(name, maxsize)
         self.queue_dict[name] = queue
         return queue
 
@@ -155,7 +155,7 @@ def main():
     queue.get()
     time.sleep(2)
     queue.get()
-    time.sleep(15)
+    time.sleep(50)
     QM.shutdown()
 
 if __name__ == '__main__':
