@@ -43,7 +43,7 @@ col.close()
 """
 
 from pymongo import MongoClient
-from bq import BQ
+from QueueManger import QueueManager
 import simplejson as json
 import bson
 import threading
@@ -73,14 +73,15 @@ class obj(object):
         self._origin = json.dumps(self.__dict__)
 
 
-class Collection(object):
+class Collection(object, queue_style = "python_queue", **kwargs):
     def __init__(self, collection, qname = None):
         self.collection = collection
         self.qname = qname
-        self.initialize()
+        self.initialize(queue_style = "python_queue", **kwargs)
 
     def initialize(self):
-        self.queue = BQ()
+        self.QM = QueueManager()
+        self.queue = self.QM.Queue(queue_style = "python_queue", **kwargs)
         self.asyn_collection = None
         self.runable = False
         self.timeout = 60

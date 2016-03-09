@@ -26,7 +26,10 @@ from redis import Redis
 
 def key_for_name(name):
     """Return the key name used to store the given queue name in Redis."""
-    return 'RedisQ:%s' % name
+    if name[:11] != "redis_queue":
+        return 'RedisQ:%s' % name
+    else:
+        return name
 
 
 class RedisQ(object):
@@ -60,6 +63,9 @@ class RedisQ(object):
     def key(self):
         """Return the key name used to store this queue in Redis."""
         return key_for_name(self.name)
+
+    def keys(self):
+        return self.__redis.keys()
 
     def qsize(self):
         return self.__redis.llen(self.key)

@@ -12,8 +12,13 @@
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
 import urlparse
 import threading
-from Queue import Queue
-
+from PythonQueue import PythonQueue
+try:
+    import redis
+    from redisQ import RedisQ
+    redis_enable = True
+except ImportError:
+    redis_enable = False
 try:
     import simplejson as json
 except ImportError:
@@ -22,20 +27,12 @@ except ImportError:
 ip="127.0.0.1"
 port=9999
 
-class OriginQueue(Queue):
-    def __init__(self, name, maxsize = 0):
-        Queue.__init__(self, name)
-        self.name = name
 
-    def put_left(self,item):
-        self.queue.appendleft(item)
+class RedisImportException(Exception):
+    def __str__(self):
+        return "can't import redis package," +
+            " please install python-redis, you can use pip install redis"
 
-    def clear(self):
-        self.queue.clear()
-        return True
-
-    def key(self):
-        return self.name
 
 # 单例模式
 def singleton(cls, *args, **kw):
@@ -45,6 +42,7 @@ def singleton(cls, *args, **kw):
             instances[cls] = cls(*args, **kw)
         return instances[cls]
     return _singleton
+
 
 #请求 对应队列的队列长度
 #接口 /qsize?name=xxx  请求单个队列的长度
@@ -93,37 +91,61 @@ class HTTPHandler(BaseHTTPRequestHandler):
 
 http_server = HTTPServer((ip, port), HTTPHandler)
 
+
 def start_server():
     global http_server
     print "http://%s:%d/ is open." % (ip, port)
     http_server.serve_forever() #设置一直监听并接收请求
 
+
 @singleton
 class QueueManger(object):
-    def __init__(self, bind_ip='127.0.0.1', bind_port=9988):
-        self.bind_ip = bind_ip
-        self.bind_port = bind_port
+    def __init__(self):
         self.queue_dict = dict()
+        self.queue_name_counter = dict()
         self.service_running = False
         if not self.service_running:
             self.t = threading.Thread(target=start_server,)
             self.t.start()
 
-    def Queue(self, name = None, maxsize=0): #获取新队列或存在的队列
-        if name in self.queue_dict.keys():
-            return queue_dict[name]
+    def Queue(self, queue_type="python_queue", name=None, **kwargs): #获取新队列或存在的队列
+        if queue_type not in ["python_queue", "redis_queue"]: #入口检查
+            raise Exception(queue_type + " wrong")
+        if queue_type = "redis_queue" and redis_enable == False:
+            raise RedisImportException
 
-        if not name:
-            max_name_id = 0
-            for namet in self.queue_dict.keys():
-                if namet[:5] == "Queue":
-                    name_id = int(namet[5:])
-                    if max_name_id <= name_id:
-                        max_name_id = name_id +1
-            name = "Queue%d" % max_name_id
-        queue = OriginQueue(name, maxsize)
-        self.queue_dict[name] = queue
-        return queue
+        if name in self.queue_dict.keys(): #存在队列即返回
+            return self.queue_dict[name]
+        else: #不存在队列即创建
+            if not name: #默认的name为队列类型加递增值
+                max_name_id = 0
+                if self.queue_name_counter.has_key(queue_type):
+                    name = queue_type + str(self.queue_name_counter[queue_type] + 1)
+                    self.queue_name_counter[queue_type] += 1
+                else:
+                    name = queue_type + "0"
+                    self.queue_name_counter[queue_type] = 0
+
+            #实际添加队列到队列字典
+            if queue_type == "python_queue":
+                queue = PythonQueue(name, **kwargs)
+            elif queue_type == "redis_queue":
+                queue = RedisQ(name, **kwargs)
+            self.queue_dict[name] = queue
+            return queue
+
+    def pull_redis_queue(host="localhost", port=6379, **kwargs): #拉取对应redis下的队列
+        if not redis_enable:
+            raise RedisImportException
+        redis = redis.Redis(host = host, port = port, **kwargs)
+        for key in redis.keys():
+            if name[:11] == "redis_queue":
+                self.queue_dict[key] = RedisQ(key, **kwargs)
+                if self.queue_name_counter.has_key(queue_type):
+                    self.queue_name_counter["redis_queue"] += 1
+                else:
+                    self.queue_name_counter["redis_queue"] = 0
+
 
     def all_queues(self): #获取全部队列字典
         return self.queue_dict
@@ -134,25 +156,14 @@ class QueueManger(object):
         else:
             return None
 
-    def clear(self, queue_ob= None, name = None): #清空队列
-        if (not queue_ob) and (not name):
-            for queue in self.queue_dict.values():
-                queue.clear()
-        elif queue_ob in self.queue_dict.values():
-            queue_ob.clear()
-        elif name in self.queue_dict.keys():
-            self.queue_dict[name].clear()
-        else:
-            raise Exception("queue error")
-
-    def remove(self, queue_ob=None, name = None): #删除队列
-        if (not queue_ob) and (not name):
+    def remove(self, queue_object=None, name = None): #删除队列
+        if (not queue_object) and (not name): #默认清空队列字典
             for queue in self.queue_dict.values():
                 queue = None
             self.queue_dict = dict()
-        elif queue_ob in self.queue_dict.values():
-            del self.queue_dict[queue_ob.name]
-        elif name in self.queue_dict.keys():
+        elif queue_object in self.queue_dict.values(): #根据队列对象清除
+            del self.queue_dict[queue_object.name]
+        elif name in self.queue_dict.keys(): #根据队列名称清除
             del self.queue_dict[name]
         else:
             raise Exception("queue error")
@@ -170,8 +181,8 @@ class QueueManger(object):
 def main():
     import time
     QM = QueueManger()
-    queue = QM.Queue(name="tt")
-    queue1 = QM.Queue(name="qw")
+    queue = QM.Queue(queue_type="python_queue")
+    queue1 = QM.Queue(queue_type="redis_queue", host='10.67.2.245')
     queue1.put("asdf")
     queue1.put(123)
     queue.put(123)
