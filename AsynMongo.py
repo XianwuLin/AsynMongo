@@ -43,7 +43,7 @@ col.close()
 """
 
 from pymongo import MongoClient
-from QueueManger import QueueManager
+from QueueManager import QueueManager
 import simplejson as json
 import bson
 import threading

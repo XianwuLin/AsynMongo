@@ -134,7 +134,7 @@ class QueueManger(object):
             self.queue_dict[name] = queue
             return queue
 
-    def pull_redis_queue(host="localhost", port=6379, **kwargs): #拉取对应redis下的队列
+    def pull_redis_queue(self, host="localhost", port=6379, **kwargs): #拉取对应redis下的队列
         if not redis_enable:
             raise RedisImportException
         redis = redis.Redis(host = host, port = port, **kwargs)
