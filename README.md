@@ -13,7 +13,7 @@ AsynMongo 提供了异步的插入和更新的方法，使用了一个单独的�
 
 demo
 
-```python
+```{python}
 from AsynMongo import Collection
 from pymongo import MongoClient
 
