@@ -1,7 +1,5 @@
 ﻿# AsynMongo
 
-标签（空格分隔）： MongoDB python
-
 ---
 Author: linxianwusx@gmail.com
 
