@@ -73,15 +73,15 @@ class obj(object):
         self._origin = json.dumps(self.__dict__)
 
 
-class Collection(object, queue_style = "python_queue", **kwargs):
-    def __init__(self, collection, qname = None):
+class Collection(object):
+    def __init__(self, collection, qname = None, queue_style = "python_queue", **kwargs):
         self.collection = collection
         self.qname = qname
         self.initialize(queue_style = "python_queue", **kwargs)
 
-    def initialize(self):
+    def initialize(self, queue_style = "python_queue", **kwargs):
         self.QM = QueueManager()
-        self.queue = self.QM.Queue(queue_style = "python_queue", **kwargs)
+        self.queue = self.QM.Queue(queue_style, **kwargs)
         self.asyn_collection = None
         self.runable = False
         self.timeout = 60
@@ -188,6 +188,7 @@ class Collection(object, queue_style = "python_queue", **kwargs):
             self.queue.put("X")
             if self.t:
                 self.t.join()
+                self.QM.shutdown()
                 return
             else:
                 return
@@ -289,7 +290,7 @@ def main():
 
     # 同步插入对象
     col.insert(man())
-    print "asyn insert ok!"
+    print "insert ok!"
 
     # 查询
     dict1 = {"name" : "bob"}
@@ -308,13 +309,13 @@ def main():
     else:
         pass
 
-    print "sync insert ok!"
+    print "update ok!"
 
 
     # 异步插入对象
     for i in xrange(1000):
         col.insert_asyn(man(), lsize=200, timeout=5)  # 插入对象, lsize为粒度大小, 默认50; 空队列等待5s, 默认60s
-    print "sync insert ok!"
+    print "asyn insert ok!"
 
     col.set_collection(client = client, db = "test", collection= 'woman')  # 申明数据库， ip, 端口，col名称，collection名称
     #异步更新
@@ -330,23 +331,7 @@ def main():
     print "asyn update ok!"
 
     col.close() #异步不等待空队列，直接关闭
-
-def main1():
-    col = Collection(MongoClient("10.67.2.245").test.tissue)
-    a = 1
-    for item in col.find():
-        if hasattr(item, "neuron"):
-            delattr(item, "neuron")
-        col.update_asyn(item)
-        a += 1
-        if a > 7000:
-            break
-
-    while col.qsize():
-        print col.qsize()
-        time.sleep(3)
-
-    col.close()
+    print "finished"
 
 if __name__ == "__main__":
-    main1()
+    main()

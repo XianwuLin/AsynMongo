@@ -6,7 +6,7 @@
 
 '''
 这个模块提供了一个OriginQueue类，扩展原生队列Queue。
-提供了一个QueueManger类，管理队列，并提供http接口。
+提供了一个QueueManager类，管理队列，并提供http接口。
 '''
 
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
@@ -27,11 +27,13 @@ except ImportError:
 ip="127.0.0.1"
 port=9999
 
+html_source = """
+<html><head><meta charset="utf-8"><title>python原生队列监控</title><script type="text/javascript" src="http://cdn.hcharts.cn/jquery/jquery-1.8.3.min.js"></script><script type="text/javascript" src="http://cdn.hcharts.cn/highcharts/highcharts.js"></script></head><body><h1 style="text-align:center">python原生队列监控</h1><div id="control"></div><div id="container" style="width:800px;height:400px"></div><script>$(function(){$(document).ready(function(){function get_y(){var e=$("input[name='control']:checked").val();return $.getJSON("/qsize?name="+e,function(e){y_value=parseInt(e.qsize)}),y_value}function newCheck(){$.ajax({url:"/all_qsizes",dateType:"json",success:function(data){json=eval(data);var allSeriesId=new Array;$(chart.series).each(function(e,a){allSeriesId.push(a.options.id)});for(var jsonName=new Array,i=0;i<json.length;i++){jsonName.push(json[i].name);var name1=json[i].name,serie=chart.get(name1),x=(new Date).getTime(),y=json[i].qsize;-1!=$.inArray(name1,allSeriesId)?serie.addPoint([x,y],!1,!0):chart.addSeries({name:name1,id:name1,data:function(){for(var e=[],a=(new Date).getTime(),t=-24;0>=t;t++)e.push({x:a+1e3*t,y:0});return e[24][1]=y,e}()},!1)}for(var i=0;i<allSeriesId.length;i++)-1==$.inArray(allSeriesId[i],jsonName)&&chart.get(allSeriesId[i]).remove(!1);chart.redraw()}})}Highcharts.setOptions({global:{useUTC:!1}});var y_value=0;$("#container").highcharts({chart:{marginRight:120},title:{text:"队列大小实时监控"},xAxis:{type:"datetime",tickPixelInterval:150},yAxis:{title:{text:"数据量"},plotLines:[{value:0,width:1,color:"#808080"}]},tooltip:{backgroundColor:"#FCFFC5",borderColor:"black",borderRadius:10,formatter:function(){return"<b>"+this.series.name+"</b><br>"+Highcharts.dateFormat("%Y-%m-%d %H:%M:%S",this.x)+"<br>"+Highcharts.numberFormat(this.y,2)}},legend:{align:"right",verticalAlign:"top",layout:"vertical",floating:!0,x:0,y:100},exporting:{enabled:!1},credits:{enabled:!1},series:[]});var chart=$("#container").highcharts();setInterval(newCheck,1e3)})});</script></body></html>
+"""
 
 class RedisImportException(Exception):
     def __str__(self):
-        return "can't import redis package," +
-            " please install python-redis, you can use pip install redis"
+        return "can't import redis package, please install python-redis, you can use pip install redis"
 
 
 # 单例模式
@@ -59,7 +61,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             query = path.query.split("=")
             if len(query) == 2:
                 if query[0].strip() == "name":
-                    QM = QueueManger()
+                    QM = QueueManager()
                     size = QM.qsize(query[1].strip())
                     self.send_response(200)
                     self.end_headers()
@@ -69,7 +71,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
                         }
                     self.wfile.write(json.dumps(return_json))
         elif path.path == '/all_qsizes':
-            QM = QueueManger()
+            QM = QueueManager()
             return_list = []
             for name in QM.all_queues().keys():
                 json1 = {
@@ -83,7 +85,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
         elif path.path == "/":
             self.send_response(200)
             self.end_headers()
-            self.wfile.write(open("index.html").read())
+            self.wfile.write(html_source)
         else:
             self.send_response(400)
             self.end_headers()
@@ -99,7 +101,7 @@ def start_server():
 
 
 @singleton
-class QueueManger(object):
+class QueueManager(object):
     def __init__(self):
         self.queue_dict = dict()
         self.queue_name_counter = dict()
@@ -111,7 +113,7 @@ class QueueManger(object):
     def Queue(self, queue_type="python_queue", name=None, **kwargs): #获取新队列或存在的队列
         if queue_type not in ["python_queue", "redis_queue"]: #入口检查
             raise Exception(queue_type + " wrong")
-        if queue_type = "redis_queue" and redis_enable == False:
+        if queue_type == "redis_queue" and redis_enable == False:
             raise RedisImportException
 
         if name in self.queue_dict.keys(): #存在队列即返回
@@ -180,7 +182,7 @@ class QueueManger(object):
 
 def main():
     import time
-    QM = QueueManger()
+    QM = QueueManager()
     queue = QM.Queue(queue_type="python_queue")
     queue1 = QM.Queue(queue_type="redis_queue", host='10.67.2.245')
     queue1.put("asdf")
