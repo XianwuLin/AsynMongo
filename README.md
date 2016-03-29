@@ -1,6 +1,7 @@
 ﻿# AsynMongo
 
 ---
+github: https://github.com/XianwuLin/AsynMongo/
 Author: linxianwusx@gmail.com
 
 AsynMongo是一个异步的操作MongoDB的python库，提供了以对象的方式进行操作MongoDB，内部使用了pymongo。
