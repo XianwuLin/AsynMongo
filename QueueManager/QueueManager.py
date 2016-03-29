@@ -91,7 +91,7 @@ class HTTPHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write("some wrong")
 
-http_server = HTTPServer((IP, POST), HTTPHandler)
+http_server = HTTPServer((IP, PORT), HTTPHandler)
 
 
 def start_server():
