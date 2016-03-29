@@ -96,7 +96,7 @@ http_server = HTTPServer((IP, PORT), HTTPHandler)
 
 def start_server():
     global http_server
-    print "http://%s:%d/ is open." % (ip, port)
+    print "http://%s:%d/ is open." % (IP, PORT)
     http_server.serve_forever() #设置一直监听并接收请求
 
 
