@@ -101,8 +101,8 @@ def start_server():
 
 
 @singleton
-class QueueManager(object, host='127.0.0.1', port=9999):
-    def __init__(self,):
+class QueueManager(object):
+    def __init__(self, host='127.0.0.1', port=9999):
         self.queue_dict = dict()
         self.queue_name_counter = dict()
         self.service_running = False
