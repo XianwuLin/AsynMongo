@@ -103,6 +103,7 @@ def start_server():
 @singleton
 class QueueManager(object):
     def __init__(self, host='127.0.0.1', port=9999):
+        global IP, PORT
         self.queue_dict = dict()
         self.queue_name_counter = dict()
         self.service_running = False
