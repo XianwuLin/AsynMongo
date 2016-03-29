@@ -80,7 +80,7 @@ class Collection(object):
         self.initialize(queue_style = "python_queue", **kwargs)
 
     def initialize(self, queue_style = "python_queue", **kwargs):
-        self.QM = QueueManager()
+        self.QM = QueueManager(host="0.0.0.0", port=9998)
         self.queue = self.QM.Queue(queue_style, **kwargs)
         self.asyn_collection = None
         self.runable = False
