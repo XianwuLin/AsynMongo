@@ -37,13 +37,13 @@ class RedisImportException(Exception):
 
 
 # 单例模式
-def singleton(cls, *args, **kw):
-    instances = {}
-    def _singleton():
-        if cls not in instances:
-            instances[cls] = cls(*args, **kw)
-        return instances[cls]
-    return _singleton
+def singleton(_cls):
+    inst = {}
+    def getinstance(*args, **kwargs):
+        if _cls not in inst:
+            inst[_cls] = _cls(*args, **kwargs)
+        return inst[_cls]
+    return getinstance
 
 
 #请求 对应队列的队列长度
