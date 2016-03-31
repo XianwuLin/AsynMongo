@@ -49,7 +49,7 @@ import bson
 import threading
 import time
 
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 
 class Empty(Exception):
     "Exception raised by Queue.get(block=0)/get_nowait()."

@@ -24,9 +24,6 @@ try:
 except ImportError:
     import json
 
-IP="127.0.0.1"
-PORT=9999
-
 html_source = """
 <html><head><meta charset="utf-8"><title>python原生队列监控</title><script type="text/javascript" src="http://cdn.hcharts.cn/jquery/jquery-1.8.3.min.js"></script><script type="text/javascript" src="http://cdn.hcharts.cn/highcharts/highcharts.js"></script></head><body><h1 style="text-align:center">python原生队列监控</h1><div id="control"></div><div id="container" style="width:800px;height:400px"></div><script>$(function(){$(document).ready(function(){function get_y(){var e=$("input[name='control']:checked").val();return $.getJSON("/qsize?name="+e,function(e){y_value=parseInt(e.qsize)}),y_value}function newCheck(){$.ajax({url:"/all_qsizes",dateType:"json",success:function(data){json=eval(data);var allSeriesId=new Array;$(chart.series).each(function(e,a){allSeriesId.push(a.options.id)});for(var jsonName=new Array,i=0;i<json.length;i++){jsonName.push(json[i].name);var name1=json[i].name,serie=chart.get(name1),x=(new Date).getTime(),y=json[i].qsize;-1!=$.inArray(name1,allSeriesId)?serie.addPoint([x,y],!1,!0):chart.addSeries({name:name1,id:name1,data:function(){for(var e=[],a=(new Date).getTime(),t=-24;0>=t;t++)e.push({x:a+1e3*t,y:0});return e[24][1]=y,e}()},!1)}for(var i=0;i<allSeriesId.length;i++)-1==$.inArray(allSeriesId[i],jsonName)&&chart.get(allSeriesId[i]).remove(!1);chart.redraw()}})}Highcharts.setOptions({global:{useUTC:!1}});var y_value=0;$("#container").highcharts({chart:{marginRight:120},title:{text:"队列大小实时监控"},xAxis:{type:"datetime",tickPixelInterval:150},yAxis:{title:{text:"数据量"},plotLines:[{value:0,width:1,color:"#808080"}]},tooltip:{backgroundColor:"#FCFFC5",borderColor:"black",borderRadius:10,formatter:function(){return"<b>"+this.series.name+"</b><br>"+Highcharts.dateFormat("%Y-%m-%d %H:%M:%S",this.x)+"<br>"+Highcharts.numberFormat(this.y,2)}},legend:{align:"right",verticalAlign:"top",layout:"vertical",floating:!0,x:0,y:100},exporting:{enabled:!1},credits:{enabled:!1},series:[]});var chart=$("#container").highcharts();setInterval(newCheck,1e3)})});</script></body></html>
 """
@@ -91,26 +88,23 @@ class HTTPHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write("some wrong")
 
-http_server = HTTPServer((IP, PORT), HTTPHandler)
+http_server = None
 
-
-def start_server():
+def start_server(host, port):
     global http_server
-    print "http://%s:%d/ is open." % (IP, PORT)
+    print "http://%s:%d/ is open." % (host, port)
+    http_server = HTTPServer((host, port), HTTPHandler)
     http_server.serve_forever() #设置一直监听并接收请求
 
 
 @singleton
 class QueueManager(object):
     def __init__(self, host='127.0.0.1', port=9999):
-        global IP, PORT
         self.queue_dict = dict()
         self.queue_name_counter = dict()
         self.service_running = False
         if not self.service_running:
-            IP = host
-            PORT = port
-            self.t = threading.Thread(target=start_server,)
+            self.t = threading.Thread(target=start_server,args=(host, port))
             self.t.start()
 
     def Queue(self, queue_type="python_queue", name=None, **kwargs): #获取新队列或存在的队列
