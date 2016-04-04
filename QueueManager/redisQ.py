@@ -55,6 +55,8 @@ class RedisQ(object):
         self.name = name
         self.serializer = serializer
         self.__redis = Redis(**kwargs)
+        self.put_len = 0
+        self.get_len = 0
 
     def __len__(self):
         return self.__redis.llen(self.key)
@@ -120,6 +122,8 @@ class RedisQ(object):
             msg = self.__redis.lpop(self.key)
         if msg is not None and self.serializer is not None:
             msg = self.serializer.loads(msg)
+
+        self.get_len += 1
         return msg
 
     def put(self, *msgs):
@@ -135,6 +139,8 @@ class RedisQ(object):
         """
         if self.serializer is not None:
             msgs = map(self.serializer.dumps, msgs)
+
+        self.put_len += 1
         self.__redis.rpush(self.key, *msgs)
 
     def put_left(self, *msgs):
@@ -149,6 +155,7 @@ class RedisQ(object):
         '''
         if self.serializer is not None:
             msgs = map(self.serializer.dumps, msgs)
+        self.put_len += 1
         self.__redis.lpush(self.key, *msgs)
 
     def worker(self, *args, **kwargs):

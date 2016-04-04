@@ -48,6 +48,7 @@ import simplejson as json
 import bson
 import threading
 import time
+import hashlib
 
 __version__ = "0.2.8"
 
@@ -64,14 +65,19 @@ class Borg(object):
         ob.__dict__ = cls._state
         return ob
 
+def hash_object(ob):
+    ob_hash_dict = dict()
+    for k,v in ob.__dict__.items():
+        ob_hash_dict[k] = hashlib.sha1(str(v)).hexdigest()
+    return ob_hash_dict
+
 
 #字典打包对象
 class obj(object):
     def __init__(self, **entries):
         self.__dict__.update(entries)
-        self._id = str(self._id)
-        self._origin = json.dumps(self.__dict__)
-
+        self._origin = hash_object(self)
+        # print self._origin
 
 class Collection(object):
     def __init__(self, collection, qname = None, queue_style = "python_queue", **kwargs):
@@ -98,25 +104,28 @@ class Collection(object):
             return dict1
 
     @staticmethod
-    def _get_remove_dict(dict_origin, dict_now):
-        remove_list = list(set(dict_origin.keys()).difference(dict_now.keys()))
+    def _get_update_and_remove_dict(ob):
+        origin_hash = ob._origin
+        delattr(ob, "_origin")
+        now_hash = hash_object(ob)
+        set_origin_hash_key = set(origin_hash.keys())
+        set_now_hash_key = set(now_hash.keys())
+        remove_key = set_origin_hash_key - set_now_hash_key
         remove_dict = dict()
-        for i in remove_list:
+        for i in remove_key:
             remove_dict[i] = 1
-        return remove_dict
 
-    @staticmethod
-    def _get_update_dict(dict_origin, dict_now):
+        eq_key = set_origin_hash_key & set_now_hash_key
         update_dict = dict()
+        for i in eq_key:
+            if origin_hash[i] != now_hash[i]:
+                update_dict[i] = getattr(ob, i)
 
-        for item in dict_now.items():
-            k,v = item
-            if dict_origin.has_key(k) and dict_origin[k] == v:
-                pass
-            else:
-                update_dict[k] = v
+        add_key = set_origin_hash_key - set_now_hash_key
+        for i in add_key:
+            update_dict[i] = getattr(ob, i)
 
-        return update_dict
+        return [update_dict, remove_dict]
 
     def set_collection(self, client, db, collection):
         self.collection = client.get_database(db).get_collection(collection)
@@ -145,7 +154,7 @@ class Collection(object):
 
         self.timeout = timeout
         self.queue.put([self.collection, "update", ob])
-
+    @profile
     def find(self, json = dict(), item= dict(), limit=0, skip=0):  # 查询，返回对象generator
         if not limit:
             if not item:
@@ -180,7 +189,7 @@ class Collection(object):
         self.lsize = lsize
         self.t = threading.Thread(target=self._run_single)
         self.t.start()
-
+    @profile
     def close(self):
         while self.queue.qsize():  # 等待未完成任务
             time.sleep(0.2)
@@ -194,7 +203,7 @@ class Collection(object):
                 return
         else:
             return
-
+    @profile
     def _run_last(self): # 执行上个循环任务
         if self.l_list:  # 插入
             self._real_insert_asyn(self.l_list)
@@ -205,6 +214,7 @@ class Collection(object):
         if self.u_list: # 更新
             for ob in self.u_list:
                 self._real_update(ob)
+            self.u_list = []
         else:
             pass
 
@@ -217,7 +227,7 @@ class Collection(object):
             else:
                 size = 1  # 如果队列为空，只要下次有数据插入（队列大于一），就会被捕获，激活线程
         return size
-
+    @profile
     def _run_single(self):
         while self.runable:
             self._run_last()
@@ -251,27 +261,24 @@ class Collection(object):
                 except Empty:
                     self.runable = False
                     break
-
+    @profile
     def _real_insert_asyn(self, l_list):
         self.collection.insert_many(l_list)
-
+    @profile
     def _real_update(self, ob):
         if not hasattr(ob, "_id"):
             raise Exception("not a normal mongo item")
         elif not hasattr(ob, "_origin"):
             raise Exception("have no _origin data, can't use update_asyn callable")
 
-        dict_now = self._get_dict(ob)
-        dict_origin = json.loads(ob._origin)
-        update_dict = self._get_update_dict(dict_origin, dict_now) #要$set的字典
-        remove_dict = self._get_remove_dict(dict_origin, dict_now) #要$unset的字典
-        _id = bson.objectid.ObjectId(ob._id)
+        update_dict, remove_dict = self._get_update_and_remove_dict(ob)
+
         if update_dict and remove_dict:
-            self.collection.update_one({"_id": _id}, {"$set": update_dict, "$unset" : remove_dict})
+            self.collection.update_one({"_id": ob._id}, {"$set": update_dict, "$unset" : remove_dict})
         elif update_dict:
-            self.collection.update_one({"_id": _id}, {"$set": update_dict})
+            self.collection.update_one({"_id": ob._id}, {"$set": update_dict})
         elif remove_dict:
-            self.collection.update_one({"_id": _id}, {"$unset" : remove_dict})
+            self.collection.update_one({"_id": ob._id}, {"$unset" : remove_dict})
 ###################
 ##测试用例
 ###################
@@ -333,5 +340,18 @@ def main():
     col.close() #异步不等待空队列，直接关闭
     print "finished"
 
+def main1():
+    col = Collection(MongoClient().test.gene)
+    for item in col.find():
+        if hasattr(item, "chrmosome"):
+            delattr(item, "chrmosome")
+        item.new_item = "13323"
+        item.good = True
+        col.update_asyn(item)
+
+    col.close()
+
+
+
 if __name__ == "__main__":
-    main()
+    main1()

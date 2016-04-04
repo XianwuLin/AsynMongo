@@ -174,6 +174,19 @@ class QueueManager(object):
         else:
             raise Exception("No queue %s" % name)
 
+    def put_size(self, name): #获取put_size
+        if self.queue_dict.has_key(name):
+            return self.queue_dict[name].put_size()
+        else:
+            raise Exception("No queue %s" % name)
+
+    def get_size(self, name): #获取put_size
+        if self.queue_dict.has_key(name):
+            return self.queue_dict[name].get_size()
+        else:
+            raise Exception("No queue %s" % name)
+
+
     def shutdown(self): #关闭队列的监控
         http_server.shutdown()
 
