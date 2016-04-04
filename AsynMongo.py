@@ -50,7 +50,7 @@ import threading
 import time
 import hashlib
 
-__version__ = "0.2.8"
+__version__ = "0.2.9"
 
 class Empty(Exception):
     "Exception raised by Queue.get(block=0)/get_nowait()."
@@ -77,17 +77,19 @@ class obj(object):
     def __init__(self, **entries):
         self.__dict__.update(entries)
         self._origin = hash_object(self)
-        # print self._origin
+
 
 class Collection(object):
-    def __init__(self, collection, qname = None, queue_style = "python_queue", **kwargs):
+    def __init__(self, collection, queue = None, **kwargs):
         self.collection = collection
-        self.qname = qname
-        self.initialize(queue_style = "python_queue", **kwargs)
+        self.initialize(queue, **kwargs)
 
-    def initialize(self, queue_style = "python_queue", **kwargs):
-        self.QM = QueueManager(host="0.0.0.0", port=9998)
-        self.queue = self.QM.Queue(queue_style, **kwargs)
+    def initialize(self, queue, **kwargs):
+        if not queue:
+            self.QM = QueueManager("0.0.0.0", port = 9998)
+            self.queue = self.QM.Queue(**kwargs)
+        else:
+            self.queue = queue
         self.asyn_collection = None
         self.runable = False
         self.timeout = 60
@@ -110,11 +112,14 @@ class Collection(object):
         now_hash = hash_object(ob)
         set_origin_hash_key = set(origin_hash.keys())
         set_now_hash_key = set(now_hash.keys())
+
+        #get remove dict
         remove_key = set_origin_hash_key - set_now_hash_key
         remove_dict = dict()
         for i in remove_key:
             remove_dict[i] = 1
 
+        #get update dict
         eq_key = set_origin_hash_key & set_now_hash_key
         update_dict = dict()
         for i in eq_key:
@@ -154,7 +159,7 @@ class Collection(object):
 
         self.timeout = timeout
         self.queue.put([self.collection, "update", ob])
-    @profile
+
     def find(self, json = dict(), item= dict(), limit=0, skip=0):  # 查询，返回对象generator
         if not limit:
             if not item:
@@ -189,7 +194,7 @@ class Collection(object):
         self.lsize = lsize
         self.t = threading.Thread(target=self._run_single)
         self.t.start()
-    @profile
+
     def close(self):
         while self.queue.qsize():  # 等待未完成任务
             time.sleep(0.2)
@@ -203,7 +208,7 @@ class Collection(object):
                 return
         else:
             return
-    @profile
+
     def _run_last(self): # 执行上个循环任务
         if self.l_list:  # 插入
             self._real_insert_asyn(self.l_list)
@@ -227,7 +232,7 @@ class Collection(object):
             else:
                 size = 1  # 如果队列为空，只要下次有数据插入（队列大于一），就会被捕获，激活线程
         return size
-    @profile
+
     def _run_single(self):
         while self.runable:
             self._run_last()
@@ -261,10 +266,10 @@ class Collection(object):
                 except Empty:
                     self.runable = False
                     break
-    @profile
+
     def _real_insert_asyn(self, l_list):
         self.collection.insert_many(l_list)
-    @profile
+
     def _real_update(self, ob):
         if not hasattr(ob, "_id"):
             raise Exception("not a normal mongo item")
@@ -340,18 +345,6 @@ def main():
     col.close() #异步不等待空队列，直接关闭
     print "finished"
 
-def main1():
-    col = Collection(MongoClient().test.gene)
-    for item in col.find():
-        if hasattr(item, "chrmosome"):
-            delattr(item, "chrmosome")
-        item.new_item = "13323"
-        item.good = True
-        col.update_asyn(item)
-
-    col.close()
-
-
 
 if __name__ == "__main__":
-    main1()
+    main()

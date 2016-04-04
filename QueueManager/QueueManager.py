@@ -25,7 +25,150 @@ except ImportError:
     import json
 
 html_source = """
-<html><head><meta charset="utf-8"><title>python原生队列监控</title><script type="text/javascript" src="http://cdn.hcharts.cn/jquery/jquery-1.8.3.min.js"></script><script type="text/javascript" src="http://cdn.hcharts.cn/highcharts/highcharts.js"></script></head><body><h1 style="text-align:center">python原生队列监控</h1><div id="control"></div><div id="container" style="width:800px;height:400px"></div><script>$(function(){$(document).ready(function(){function get_y(){var e=$("input[name='control']:checked").val();return $.getJSON("/qsize?name="+e,function(e){y_value=parseInt(e.qsize)}),y_value}function newCheck(){$.ajax({url:"/all_qsizes",dateType:"json",success:function(data){json=eval(data);var allSeriesId=new Array;$(chart.series).each(function(e,a){allSeriesId.push(a.options.id)});for(var jsonName=new Array,i=0;i<json.length;i++){jsonName.push(json[i].name);var name1=json[i].name,serie=chart.get(name1),x=(new Date).getTime(),y=json[i].qsize;-1!=$.inArray(name1,allSeriesId)?serie.addPoint([x,y],!1,!0):chart.addSeries({name:name1,id:name1,data:function(){for(var e=[],a=(new Date).getTime(),t=-24;0>=t;t++)e.push({x:a+1e3*t,y:0});return e[24][1]=y,e}()},!1)}for(var i=0;i<allSeriesId.length;i++)-1==$.inArray(allSeriesId[i],jsonName)&&chart.get(allSeriesId[i]).remove(!1);chart.redraw()}})}Highcharts.setOptions({global:{useUTC:!1}});var y_value=0;$("#container").highcharts({chart:{marginRight:120},title:{text:"队列大小实时监控"},xAxis:{type:"datetime",tickPixelInterval:150},yAxis:{title:{text:"数据量"},plotLines:[{value:0,width:1,color:"#808080"}]},tooltip:{backgroundColor:"#FCFFC5",borderColor:"black",borderRadius:10,formatter:function(){return"<b>"+this.series.name+"</b><br>"+Highcharts.dateFormat("%Y-%m-%d %H:%M:%S",this.x)+"<br>"+Highcharts.numberFormat(this.y,2)}},legend:{align:"right",verticalAlign:"top",layout:"vertical",floating:!0,x:0,y:100},exporting:{enabled:!1},credits:{enabled:!1},series:[]});var chart=$("#container").highcharts();setInterval(newCheck,1e3)})});</script></body></html>
+<html>
+
+    <head>
+        <meta charset="utf-8">
+        <title>python原生队列监控</title>
+        <script type="text/javascript" src="http://cdn.hcharts.cn/jquery/jquery-1.8.3.min.js">
+        </script>
+        <script type="text/javascript" src="http://cdn.hcharts.cn/highcharts/highcharts.js">
+        </script>
+        <link rel="stylesheet" href="https://rawgithub.com/yesmeck/jquery-jsonview/master/dist/jquery.jsonview.css" />
+        <script type="text/javascript" src="https://rawgithub.com/yesmeck/jquery-jsonview/master/dist/jquery.jsonview.js"></script>
+    </head>
+
+    <body>
+        <h1 style="text-align: center;">python原生队列监控</h1>
+        <div style="display:inline">
+        <div id="container" style="width:800px;height:400px;float:left;padding-right:20px"></div>
+        <div id="container1" style="width:380px;height:800px;float:left"></div>
+        </div>
+        <script>
+            $(function() {
+                $(document).ready(function() {
+                    Highcharts.setOptions({
+                        global: {
+                            useUTC: false
+                        }
+                    });
+                    $('#container').highcharts({
+                        chart: {
+                            marginRight: 140
+                        },
+                        title: {
+                            text: '队列大小实时监控' //主标题
+                        },
+                        xAxis: { //X轴
+                            type: 'datetime',
+                            tickPixelInterval: 150
+                        },
+                        yAxis: { //Y轴
+                            min: 0,
+                            title: {
+                                text: '数据量'
+                            },
+                            plotLines: [{
+                                value: 0,
+                                width: 1,
+                                color: '#808080'
+                            }]
+                        },
+                        tooltip: {
+                            backgroundColor: '#FCFFC5',
+                            borderColor: 'black',
+                            borderRadius: 10,
+                            formatter: function() {
+                                return '<b>' + this.series.name + '</b><br>' + Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) + '<br>' + Highcharts.numberFormat(this.y, 2);
+                            }
+                        },
+                        legend: {
+                            align: 'right',
+                            verticalAlign: 'top',
+                            layout: "vertical",
+                            floating: true,
+                            x: 0,
+                            y: 100
+                        },
+                        exporting: {
+                            enabled: false
+                        },
+                        credits: {
+                            enabled: false
+                        },
+                        series: []
+                    });
+
+                    var chart = $('#container').highcharts();
+
+                    function newCheck1(){
+                        $.ajax({
+                            url: "/all_get_put_size",
+                            dataType: "json",
+                            success: function(data){
+                                json = eval(data);
+                                $('#container1').JSONView(json);
+                            }
+                        });
+                    };
+
+                    function newCheck() {
+                        $.ajax({
+                            url: "/all_qsizes",
+                            dateType: "json",
+                            success: function(data) {
+                                json = eval(data);
+                                //获取全部的serie id
+                                var allSeriesId = new Array();
+                                $(chart.series).each(function(i, serie) {
+                                    allSeriesId.push(serie.options.id);
+                                });
+                                var jsonName = new Array();
+                                for (var i = 0; i < json.length; i++) {
+                                    jsonName.push(json[i]["name"])
+                                    var name1 = json[i]["name"];
+                                    var serie = chart.get(name1);
+                                    var x = (new Date()).getTime();
+                                    var y = json[i]["qsize"];
+                                    if ($.inArray(name1, allSeriesId) != -1) { //更新已有的线
+                                        serie.addPoint([x, y], false, true);
+                                        //                                      serie.removePoint(0, false);
+                                    } else { //添加新的线
+                                        chart.addSeries({
+                                            name: name1,
+                                            id: name1,
+                                            data: (function() {
+                                                var data = [];
+                                                var time = (new Date()).getTime();
+                                                for (var i = -24; i <= 0; i++) {
+                                                    data.push({
+                                                        x: time + i * 1000,
+                                                        y: 0
+                                                    });
+                                                }
+                                                data[24][1] = y;
+                                                return data;
+                                            })()
+                                        }, false);
+                                    };
+                                };
+                                for (var i = 0; i < allSeriesId.length; i++) { //执行完的queue处理删除之
+                                    if ($.inArray(allSeriesId[i], jsonName) == -1) {
+                                        chart.get(allSeriesId[i]).remove(false);
+                                    }
+                                }
+                                chart.redraw();
+                            }
+                        });
+                    };
+                    setInterval(newCheck, 1000);
+                    setInterval(newCheck1, 1000);
+                });
+            });
+        </script>
+    </body>
+
+</html>
 """
 
 class RedisImportException(Exception):
@@ -67,6 +210,34 @@ class HTTPHandler(BaseHTTPRequestHandler):
                         "qsize" : str(size)
                         }
                     self.wfile.write(json.dumps(return_json))
+        elif path.path == '/get_put_size':
+            query = path.query.split("=")
+            if len(query) == 2:
+                if query[0].strip() == "name":
+                    QM = QueueManager()
+                    get_size = QM.get_size(query[1].strip())
+                    put_size = QM.put_size(query[1].strip())
+                    self.send_response(200)
+                    self.end_headers()
+                    return_json = {
+                        "name" : query[1].strip(),
+                        "get_size" : str(get_size),
+                        "put_size": str(put_size)
+                        }
+                    self.wfile.write(json.dumps(return_json))
+        elif path.path == '/all_get_put_size':
+            QM = QueueManager()
+            return_list = []
+            for name in QM.all_queues().keys():
+                json1 = {
+                    "name" :  name,
+                    "get_size" : QM.get_size(name),
+                    "put_size" : QM.put_size(name)
+                }
+                return_list.append(json1)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps(return_list))
         elif path.path == '/all_qsizes':
             QM = QueueManager()
             return_list = []
@@ -176,13 +347,13 @@ class QueueManager(object):
 
     def put_size(self, name): #获取put_size
         if self.queue_dict.has_key(name):
-            return self.queue_dict[name].put_size()
+            return self.queue_dict[name].put_size
         else:
             raise Exception("No queue %s" % name)
 
     def get_size(self, name): #获取put_size
         if self.queue_dict.has_key(name):
-            return self.queue_dict[name].get_size()
+            return self.queue_dict[name].get_size
         else:
             raise Exception("No queue %s" % name)
 
