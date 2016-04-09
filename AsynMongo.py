@@ -126,7 +126,7 @@ class Collection(object):
             if origin_hash[i] != now_hash[i]:
                 update_dict[i] = getattr(ob, i)
 
-        add_key = set_origin_hash_key - set_now_hash_key
+        add_key = set_now_hash_key - set_origin_hash_key
         for i in add_key:
             update_dict[i] = getattr(ob, i)
 
