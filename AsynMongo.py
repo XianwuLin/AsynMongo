@@ -202,7 +202,7 @@ class Collection(object):
             self.queue.put("X")
             if self.t:
                 self.t.join()
-                if hasattr(self, QM):
+                if hasattr(self, 'QM'):
                     self.QM.shutdown()
                 return
             else:
