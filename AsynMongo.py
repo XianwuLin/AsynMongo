@@ -82,19 +82,30 @@ class obj(object):
 class Collection(object):
     def __init__(self, collection, queue = None, **kwargs):
         self.collection = collection
-        self.initialize(queue, **kwargs)
-
-    def initialize(self, queue, **kwargs):
+        self.runable = False
+        self._queue_set = queue
+        self.kwargs = kwargs
+        
+    def initialize(self, queue, lsize=50, timeout=60, **kwargs):
         if not queue:
             self.QM = QueueManager("0.0.0.0", port = 9998)
             self.queue = self.QM.Queue(**kwargs)
         else:
             self.queue = queue
         self.asyn_collection = None
-        self.runable = False
-        self.timeout = 60
+        self.lsize = lsize
+        self.timeout = timeout
         self.l_list = []  #插入任务
         self.u_list = []  #更新任务
+        
+        #clear all old queue data
+        while self.queue.qsize():
+            _ = self.queue.get()
+        
+        #set status running
+        self.runable = True
+        self.t = threading.Thread(target=self._run_single)
+        self.t.start()
 
     @staticmethod
     def _get_dict(ob):
@@ -136,16 +147,19 @@ class Collection(object):
         self.collection = client.get_database(db).get_collection(collection)
 
     def qsize(self):
-        return self.queue.qsize()
+        if hasattr(self, "queue"):
+            return self.queue.qsize()
+        else:
+            raise Exception("not use asyn feature, have no queue")
 
     def insert(self, ob):  # 同步插入
         self.collection.insert_one(self._get_dict(ob))
 
     def insert_asyn(self, ob, lsize=50, timeout=60):  # 异步插入
+        #lazy initialize asyn
         if not self.runable:
-            self.run(lsize=lsize)
+            self.initialize(queue=self._queue_set, lsize=lsize, timeout=timeout, **self.kwargs)
 
-        self.timeout = timeout
         self.queue.put([self.collection, "insert", ob])
 
     def update(self, ob):  # 更新
@@ -154,10 +168,10 @@ class Collection(object):
         self._real_update(ob)
 
     def update_asyn(self, ob, lsize=50, timeout=60):  # 异步更新
+        #lazy initialize asyn
         if not self.runable:
-            self.run(lsize=lsize)
-
-        self.timeout = timeout
+            self.initialize(queue=self._queue_set, lsize=lsize, timeout=timeout, **self.kwargs)
+            
         self.queue.put([self.collection, "update", ob])
 
     def find(self, json = dict(), item= dict(), limit=0, skip=0):  # 查询，返回对象generator
@@ -177,7 +191,7 @@ class Collection(object):
             for item in result:
                 yield obj(**item)
 
-    def find_one(self,  json = dict(), item= dict()):  # 查询一条，返回对象
+    def find_one(self,  json = dict(), item= dict()):  # find a item, return a object
         if not item:
             result = self.collection.find_one(json)
         else:
@@ -187,28 +201,25 @@ class Collection(object):
         else:
             return obj(**result)
 
-    def run(self, lsize=50):
-        while self.queue.qsize():
-            _ = self.queue.get()
-        self.runable = True
-        self.lsize = lsize
-        self.t = threading.Thread(target=self._run_single)
-        self.t.start()
-
     def close(self):
-        while self.queue.qsize():  # 等待未完成任务
-            time.sleep(0.2)
-        if self.runable:
-            self.queue.put("X")
-            if self.t:
-                self.t.join()
-                if hasattr(self, 'QM'):
-                    self.QM.shutdown()
-                return
+        # not use asyn
+        if not self.runable:
+            pass
+        #use asyn
+        else:
+            while self.queue.qsize():  # 等待未完成任务
+                time.sleep(0.2)
+            if self.runable:
+                self.queue.put("X")
+                if self.t:
+                    self.t.join()
+                    if hasattr(self, 'QM'):
+                        self.QM.shutdown()
+                    return
+                else:
+                    return
             else:
                 return
-        else:
-            return
 
     def _run_last(self): # 执行上个循环任务
         if self.l_list:  # 插入
