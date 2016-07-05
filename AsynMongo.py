@@ -89,9 +89,15 @@ class Collection(object):
     def initialize(self, queue, lsize=50, timeout=60, **kwargs):
         if not queue:
             self.QM = QueueManager("0.0.0.0", port = 9998)
-            self.queue = self.QM.Queue(**kwargs)
+            self.queue = self.QM.Queue(queue_type="python_queue", **kwargs)
         else:
-            self.queue = queue
+            self.QM = QueueManager("0.0.0.0", port = 9998)
+            try:
+                self.queue = self.QM.Queue(queue_type=queue, **kwargs)
+            except Exception as e:
+                print "queue type: `python_queue`, `redis_queue`"
+                import traceback
+                traceback.print_exc()
         self.asyn_collection = None
         self.lsize = lsize
         self.timeout = timeout
